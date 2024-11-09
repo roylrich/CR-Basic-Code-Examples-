@@ -1,0 +1,334 @@
+'CR1000X
+'Stephanie Pennington and Roy Rich  v1.1a 4-20-20
+'Add Aquatroll 200 and 600 controls
+'Add multiplexer for saplflow
+'Chnage for double control port sampling for sdi12
+
+' control ports
+'c1 sd12 teros
+'c2 clock am16/32
+'c3 aquatroll
+'c4 reset am1632
+'c5 sd12 aquatroll
+'c6
+'c7
+'c8
+
+'Declare Variables and Units
+Public BattV
+Public PTemp_C
+Public DiffVolt(14)
+Public Flag(10)
+'Public Mult(14)={1,1,1,1,1,1,1,1,1,1,1,1,1,1}
+'Public Offs(14)={0,0,0,0,0,0,0,0,0,0,0,0,0,0}
+Public Statname As String ' logger name
+Public PB ' packbus number of logger
+Public Batt_CHECK As String
+
+Public Lcount
+Dim k, m
+
+Units BattV=Volts
+Units PTemp_C=Deg C
+Units DiffVolt=mV
+
+' TEROS sesnors
+Public Teros(22,3)
+Public Teros1(22,3)
+Public Teros5(22,3)
+
+' Aquatroll 200 setting adress = 0 control channel 3
+Public AquaTroll(9)
+Public Aquatroll_ID(2) As String
+Alias AquaTroll(1)= Depth
+Alias AquaTroll(2)= Temperature
+Alias AquaTroll(3)= Actual_Conductivity
+Alias AquaTroll(4)= Specific_Conductivity
+Alias AquaTroll(5)= Salinity
+Alias AquaTroll(6)= TDS
+Alias AquaTroll(7)= Water_Density
+Alias AquaTroll(8)= Pressure
+Alias AquaTroll(9)= Resistivity
+
+Units Depth = cm
+Units Temperature = C
+Units Actual_Conductivity = uS/cm 
+Units Specific_Conductivity = uS/cm 
+Units Salinity= PSU
+Units TDS = ppt
+Units Water_Density= g/cm3
+Units Pressure = PSI
+Units Resistivity = ohm-cm
+
+'Aquatroll600
+Public AquaTroll600(19)
+Alias AquaTroll600(1)= Barometric_Pressure600
+Alias AquaTroll600(2)= Temperature600
+Alias AquaTroll600(3)= Actual_Conductivity600
+Alias AquaTroll600(4)= Specific_Conductivity600
+Alias AquaTroll600(5)= Salinity600
+Alias AquaTroll600(6)= TDS600
+Alias AquaTroll600(7)= Water_Density600
+Alias AquaTroll600(8)= Resistivity600
+Alias AquaTroll600(9)= pH600
+Alias AquaTroll600(10)= pH_mV600
+Alias AquaTroll600(11)= pH_ORP600
+Alias AquaTroll600(12)= RDO_concen600
+Alias AquaTroll600(13)= RDO_perc_sat600
+Alias AquaTroll600(14)= RDO_part_Pressure600
+Alias AquaTroll600(15)= Pressure600
+Alias AquaTroll600(16)= Depth600
+Alias AquaTroll600(17)= Temperature_Int600
+Alias AquaTroll600(18)= Voltage_Ext600
+Alias AquaTroll600(19)= Battery_Int600
+
+Units Barometric_Pressure600= mmHg
+Units Temperature600=  C
+Units Actual_Conductivity600=  uS/cm
+Units Specific_Conductivity600= uS/cm
+Units Salinity600= PSU
+Units TDS600= ppt
+Units Water_Density600= g/cm3
+Units Resistivity600= ohm-cm
+Units pH600= pH
+Units pH_mV600= mV
+Units pH_ORP600 = ORP- mV
+Units RDO_concen600= mg/L
+Units RDO_perc_sat600= %Sat
+Units RDO_part_Pressure600= Torr
+Units Pressure600= PSI
+Units Depth600= cm
+Units Temperature_Int600= C
+Units Voltage_Ext600= V
+Units Battery_Int600= %
+
+
+'Define Data Tables
+DataTable(sapflow,True,-1)
+	DataInterval(0,15,Min,10)
+	Sample(1, Statname, FP2 )
+	Average(1,BattV,FP2,False)
+	Average(1,DiffVolt(1),FP2,False)
+	Average(1,DiffVolt(2),FP2,False)
+	Average(1,DiffVolt(3),FP2,False)
+	Average(1,DiffVolt(4),FP2,False)
+	Average(1,DiffVolt(5),FP2,False)
+	Average(1,DiffVolt(6),FP2,False)
+	Average(1,DiffVolt(7),FP2,False)
+	Average(1,DiffVolt(8),FP2,False)
+	Average(1,DiffVolt(9),FP2,False)
+	Average(1,DiffVolt(10),FP2,False)
+	Average(1,DiffVolt(11),FP2,False)
+	Average(1,DiffVolt(12),FP2,False)
+	Average(1,DiffVolt(13),FP2,False)
+ Average(1,DiffVolt(14),FP2,False)
+Sample(1,DiffVolt(1),FP2)
+  Sample(1,DiffVolt(2),FP2)
+  Sample(1,DiffVolt(3),FP2)
+  Sample(1,DiffVolt(4),FP2)
+  Sample(1,DiffVolt(5),FP2)
+  Sample(1,DiffVolt(6),FP2)
+  Sample(1,DiffVolt(7),FP2)
+  Sample(1,DiffVolt(8),FP2)
+ Sample(1,DiffVolt(9),FP2) 
+ Sample(1,DiffVolt(10),FP2)
+  Sample(1,DiffVolt(11),FP2) 
+  Sample(1,DiffVolt(12),FP2)
+   Sample(1,DiffVolt(13),FP2)  
+ Sample(1,DiffVolt(14),FP2)
+	EndTable
+
+DataTable (WaterLevel200,Flag(5),-1)
+  DataInterval (0,15,min,10)
+Sample(1, Statname, String)
+Sample (1, Aquatroll_ID(2), String) 
+Sample (1, Depth, IEEE4)
+Sample (1, Temperature, IEEE4)
+Sample (1, Actual_Conductivity, IEEE4)
+Sample (1,Specific_Conductivity, IEEE4)
+Sample (1, Salinity, IEEE4)
+Sample (1, TDS, IEEE4)
+Sample (1, Water_Density, IEEE4)
+Sample (1, Pressure, IEEE4)
+Sample (1, Resistivity, IEEE4)
+EndTable
+
+
+DataTable (Terosdata,True,-1)
+  DataInterval (0,15,min,10)
+Sample(1, Statname, String)
+Sample (66, Teros(1,1), IEEE4)
+'Sample (22, Teros(1,2), IEEE4)
+'Sample (22, Teros(1,3), IEEE4)
+EndTable
+
+DataTable (WaterLevel600,Flag(6),-1)
+DataInterval (0,15,min,10)
+Sample(1, Statname, String)
+Sample (1, Aquatroll_ID(1), String) 
+Sample(1, Barometric_Pressure600,IEEE4) ' mmHg
+Sample(1, Temperature600,IEEE4) '  C
+Sample(1, Actual_Conductivity600,IEEE4) '  uS/cm
+Sample(1, Specific_Conductivity600,IEEE4) ' uS/cm
+Sample(1, Salinity600,IEEE4) ' PSU
+Sample(1, TDS600,IEEE4) ' ppt
+Sample(1, Water_Density600,IEEE4) ' g/cm3
+Sample(1, Resistivity600,IEEE4) ' ohm-cm
+Sample(1, pH600,IEEE4) ' pH
+Sample(1, pH_mV600,IEEE4) ' mV
+Sample(1, pH_ORP600 ,IEEE4) ' ORP- mV
+Sample(1, RDO_concen600,IEEE4) ' mg/L
+Sample(1, RDO_perc_sat600,IEEE4) ' %Sat
+Sample(1, RDO_part_Pressure600,IEEE4) ' Torr
+Sample(1, Pressure600,IEEE4) ' PSI
+Sample(1, Depth600,IEEE4) ' ft
+Sample(1, Temperature_Int600,IEEE4) ' C
+Sample(1, Voltage_Ext600,IEEE4) ' V
+Sample(1, Battery_Int600,IEEE4) ' %
+EndTable
+'Main Program
+BeginProg
+	'Main Scan
+	Scan(60,Sec,1,0)
+	  Statname=Status.StationName(1,1)
+	  PB = Status.PakbusAddress(1,1)
+
+		'Default CR1000 Datalogger Battery Voltage measurement 'BattV'
+		Battery(BattV)
+		  If BattV >= 12 Then Batt_CHECK = "OKAY" Else Batt_CHECK ="NEEDS ATTENTION"
+
+		'Default CR1000 Datalogger Wiring Panel Temperature measurement 'PTemp_C'
+		PanelTemp(PTemp_C,_60Hz)
+		'Generic Differential Voltage measurements 'DiffVolt()'
+
+If PB =! 43 OR PB =! 44 OR PB =! 49 
+VoltDiff(DiffVolt(),8,mV200C,1,True,0,60,1,0) ' will change mv2500 to CR1000 versions. to
+		'Call Data Tables and Store Data
+	  
+EndIf  
+
+If PB = 43 OR PB = 44 OR PB = 49' logger with AM1632s
+
+VoltDiff(DiffVolt(),6 ,mV200C,1,True,0,60,1,0) ' will change mv2500 to CR1000 versions. to 
+		'Call Data Tables and Store Data
+
+PortSet(C2,1)
+Delay(0,1000,mSec)
+Lcount=1
+SubScan(500,msec,8)
+PulsePort(C4,20000)
+'Switch to next AM16/32 Multiplexer channel
+VoltDiff (DiffVolt(Lcount+6),1,mV200C,7,True,0,60,1,0)
+'VoltDiff (Volt_AM2(LCount),1,mV1000C,6,True, 0,_60Hz,1.0,0)
+Lcount=Lcount+1
+NextSubScan
+
+'Turn AM16/32 Multiplexer Off
+PortSet(C2,0)
+EndIf
+
+If TimeIntoInterval(0,5,min)
+SW12(SW12_1,1)
+SW12(SW12_2,1)  	
+EndIf
+
+
+
+
+
+
+
+If PB = 46 OR PB = 44 OR PB = 47 OR PB = 42 OR PB = 50 ' logger with 200zs
+Flag(5)=-1
+   SDI12Recorder (AquaTroll(1),c3,"2","C!",1.0,0, -1,1)
+   SDI12Recorder (Aquatroll_ID(2),c3,"2","I!",1.0,0)
+EndIf
+   
+If PB = 46 OR PB = 48 OR PB = 43 ' loggers with 600s
+
+Flag(6)=-1
+   SDI12Recorder (AquaTroll600(1),c3,"1","C!",1.0,0,-1,1)
+   SDI12Recorder (Aquatroll_ID(1),c3,"1","I!",1.0,0)
+EndIf    
+ 
+
+If TimeIntoInterval(1,5,min)
+SDI12Recorder (Teros1(1,1),c1,"8","M!",1.0,0,-1,1)' was a NOW 8
+SDI12Recorder (Teros1(2,1),c1,"b","M!",1.0,0,-1,1)
+SDI12Recorder (Teros1(3,1),c1,"c","M!",1.0,0,-1,1)
+SDI12Recorder (Teros1(4,1),c1,"d","M!",1.0,0,-1,1)
+SDI12Recorder (Teros1(5,1),c1,"e","M!",1.0,0,-1,1)
+SDI12Recorder (Teros1(6,1),c1,"f","M!",1.0,0,-1,1)
+SDI12Recorder (Teros1(7,1),c1,"g","M!",1.0,0,-1,1)
+SDI12Recorder (Teros1(8,1),c1,"h","M!",1.0,0,-1,1)
+SDI12Recorder (Teros1(9,1),c1,"i","M!",1.0,0,-1,1)
+SDI12Recorder (Teros1(10,1),c1,"j","M!",1.0,0,-1,1)
+SDI12Recorder (Teros1(11,1),c1,"k","M!",1.0,0,-1,1)
+SDI12Recorder (Teros1(12,1),c1,"l","M!",1.0,0,-1,1)
+SDI12Recorder (Teros1(13,1),c1,"9","M!",1.0,0,-1,1) 'was m now 9
+
+SDI12Recorder (Teros5(14,1),c5,"7","M!",1.0,0,-1,1) 'was A
+SDI12Recorder (Teros5(15,1),c5,"B","M!",1.0,0,-1,1)
+SDI12Recorder (Teros5(16,1),c5,"C","M!",1.0,0,-1,1)
+SDI12Recorder (Teros5(17,1),c5,"D","M!",1.0,0,-1,1)
+SDI12Recorder (Teros5(18,1),c5,"E","M!",1.0,0,-1,1)
+SDI12Recorder (Teros5(19,1),c5,"F","M!",1.0,0,-1,1)
+SDI12Recorder (Teros5(20,1),c5,"G","M!",1.0,0,-1,1)
+SDI12Recorder (Teros5(21,1),c5,"H","M!",1.0,0,-1,1)
+SDI12Recorder (Teros5(22,1),c5,"I","M!",1.0,0,-1,1)
+
+EndIf
+
+If TimeIntoInterval(2,5,min)
+SDI12Recorder (Teros1(14,1),c1,"7","M!",1.0,0,-1,1) 'was A now 7
+SDI12Recorder (Teros1(15,1),c1,"B","M!",1.0,0,-1,1)
+SDI12Recorder (Teros1(16,1),c1,"C","M!",1.0,0,-1,1)
+SDI12Recorder (Teros1(17,1),c1,"D","M!",1.0,0,-1,1)
+SDI12Recorder (Teros1(18,1),c1,"E","M!",1.0,0,-1,1)
+SDI12Recorder (Teros1(19,1),c1,"F","M!",1.0,0,-1,1)
+SDI12Recorder (Teros1(20,1),c1,"G","M!",1.0,0,-1,1)
+SDI12Recorder (Teros1(21,1),c1,"H","M!",1.0,0,-1,1)
+SDI12Recorder (Teros1(22,1),c1,"I","M!",1.0,0,-1,1)
+
+SDI12Recorder (Teros5(1,1),c5,"8","M!",1.0,0,-1,1)' was  a now 8
+SDI12Recorder (Teros5(2,1),c5,"b","M!",1.0,0,-1,1)
+SDI12Recorder (Teros5(3,1),c5,"c","M!",1.0,0,-1,1)
+SDI12Recorder (Teros5(4,1),c5,"d","M!",1.0,0,-1,1)
+SDI12Recorder (Teros5(5,1),c5,"e","M!",1.0,0,-1,1)
+SDI12Recorder (Teros5(6,1),c5,"f","M!",1.0,0,-1,1)
+SDI12Recorder (Teros5(7,1),c5,"g","M!",1.0,0,-1,1)
+SDI12Recorder (Teros5(8,1),c5,"h","M!",1.0,0,-1,1)
+SDI12Recorder (Teros5(9,1),c5,"i","M!",1.0,0,-1,1)
+SDI12Recorder (Teros5(10,1),c5,"j","M!",1.0,0,-1,1)
+SDI12Recorder (Teros5(11,1),c5,"k","M!",1.0,0,-1,1)
+SDI12Recorder (Teros5(12,1),c5,"l","M!",1.0,0,-1,1)
+SDI12Recorder (Teros5(13,1),c5,"9","M!",1.0,0,-1,1) 'was m now 9
+EndIf
+
+If TimeIntoInterval(4,5,min)
+SW12(SW12_1,0)
+SW12(SW12_2,0)  	
+EndIf
+
+
+For k = 1 To 22 Step 1
+For m = 1 To 3 Step 1 
+
+If Teros1 (k,m) = NAN
+Teros(k,m) = Teros5 (k,m)
+Else 
+Teros(k,m) = Teros1 (k,m)
+EndIf
+
+Next m
+Next k 
+
+
+ CallTable sapflow
+ CallTable Waterlevel600
+ CallTable Waterlevel200
+ CallTable Terosdata
+		
+NextScan
+EndProg
+  u        

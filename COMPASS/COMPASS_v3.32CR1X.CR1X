@@ -1,0 +1,948 @@
+'CR1000X Program
+
+'COMPASS Synoptic Node Program Version 3.32
+
+'Roy Rich 3/12/2022 3.31
+'Roy Rich update documentation in 3.32 for publication
+
+
+' This program uses the pakbusID of the logger to determine which components will be operational for each position at each synpotic node and the production of data tables for instrument modules
+' Here this is done within program as part of separate configuration file
+
+' Sensors deployed and programed arrangement
+' ClimaVue - SDI address = 0 in open Wetland Site
+' Lior PAR sensor Dif1 in wetland site
+' Aquatroll 600 (3 units) SDI addresses 7,8,9
+' TEROS12 sesnors (16) units SDI addresses 1,2,3,4 (10cm),5,6 (30cm) 4 in upland, 4, transition, 2 Wetland 
+' Sapflow (up to 24 sesnors) 12 running on multiplexer module A or B
+' EXO2 sonde (RS232 connections via cable or Digi Radio)
+
+' Cntrol port allocation
+'c1 aquatrolls/ climavue
+'c2 clock am16/32
+'c3  teros1 sdi12
+'c4  reset multiplexerA
+'c5  teros2 sdi12 
+'c6  reset multiplexerB
+'c7- sondeRX
+'c8- sondeTX
+
+'Declare Variables and Units
+Public BattV' incoming voltage from power module to logger
+Public SolarV' incoming solar voltage
+Public PTemp_C ' panel temperature
+Public DiffVoltA(12)' sapflow mv from multiplexer A
+Public DiffVoltB(12)' sapflow mv from multiplexer B
+
+Public Flag(14)As Boolean ' flags are used to control system
+' Flag(1) ClimaVue and Par
+' Flag(2) SapflowA
+' Flag(3) SapflowB
+' Flag(4) TEROSA
+' Flag(5) TEROSB
+' Flag(6) TEROSC
+' Flag(7) AQ600A
+' Flag(8) AQ600B
+' Flag(9) AQ600C
+' Flag(10) EXO2Sonde
+
+Public Statname As String ' logger name
+Public PB ' packbus number of logger
+Public Batt_CHECK As String ' check on battery 
+Public Solar_CHECK As String 'check on solar power using 10:1 voltage divider on Dif8
+Units BattV=Volts
+Units SolarV=Volts
+Units PTemp_C=Deg C
+
+'ClimaVue Meterology Data
+'Public Mult(14)={1,1,1,1,1,1,1,1,1,1,1,1,1,1}
+'Public Offs(14)={0,0,0,0,0,0,0,0,0,0,0,0,0,0}
+Public CVData(14)
+Public SlrTF_MJ
+Public CVMeta As String * 40
+Public WSPrev
+Public WindDirPrev
+Public MaxWSprev
+Public Invalid_Wind As Long
+
+Alias CVData(1)=SlrFD_W
+Alias CVData(2)=Rain_mm
+Alias CVData(3)=Strikes
+Alias CVData(4)=Dist_km
+Alias CVData(5)=WS_ms
+Alias CVData(6)=WindDir
+Alias CVData(7)=MaxWS_ms
+Alias CVData(8)=AirT_C
+Alias CVData(9)=VP_mbar
+Alias CVData(10)=BP_mbar
+Alias CVData(11)=RH
+Alias CVData(12)=RHT_C
+Alias CVData(13)=TiltNS_deg
+Alias CVData(14)=TiltWE_deg
+
+Units SlrTF_MJ=MJ/m^2
+Units SlrFD_W=W/m^2
+Units Rain_mm=mm
+Units Strikes=count
+Units Dist_km=kilometers
+Units WS_ms=meters/second
+Units WindDir=degrees
+Units MaxWS_ms=meters/second
+Units AirT_C=Deg C
+Units VP_mbar=mbar
+Units BP_mbar=mbar
+Units RH=%
+Units RHT_C=Deg C
+Units TiltNS_deg=degrees
+Units TiltWE_deg=degrees
+
+' PAR SENSOR Li190rl
+Public PAR_Den_C
+Public PAR_Tot_C
+Public Par2C ' CALIBRATION COEEFICIENT FRO Li190rl
+
+Units PAR_Den_C = micromols/s/m^2
+Units PAR_Tot_C = mmol/m^2second
+
+'Define Data Tables
+DataTable(ClimaVue50_15min,Flag(1),-1)
+ DataInterval(0,15,Min,10)
+ Average(1,SlrFD_W,FP2,False)
+ Totalize(1,SlrTF_MJ,IEEE4,False)
+ Totalize(1,Rain_mm,FP2,False)
+ WindVector(1,WS_ms,WindDir,FP2,False,0,0,0)
+ FieldNames("WS_ms_S_WVT,WindDir_D1_WVT,WindDir_SD1_WVT")
+ Maximum(1,MaxWS_ms,FP2,False,True)
+ Totalize(1,Invalid_Wind,FP2,False)
+ Average(1,AirT_C,FP2,False)
+ Maximum(1,AirT_C,FP2,False,True)
+ Minimum(1,AirT_C,FP2,False,True)
+ Average(1,VP_mbar,IEEE4,False)
+ Sample(1,BP_mbar,IEEE4)
+ Maximum(1,BP_mbar,IEEE4,False,True)
+ Minimum(1,BP_mbar,IEEE4,False,True)
+ Sample(1,RH,FP2)
+ Average(1,RHT_C,FP2,False)
+ Average(1,TiltNS_deg,FP2,False)
+ Average(1,TiltWE_deg,FP2,False)
+ Totalize(1,Strikes,FP2,False)
+ Minimum(1,Dist_km,FP2,False,True)
+ Average(1,PAR_Den_C, FP2, 0)
+ Totalize(1, PAR_Tot_C, FP2, 0)
+ Sample(1,CVMeta,String)
+EndTable
+
+DataTable(ClimaVue50_24hr,Flag(1),-1)
+ DataInterval(0,1440,Min,10)
+ Minimum(1,BattV,FP2,False,False)
+ Totalize(1,Rain_mm,FP2,False)
+ Average(1,SlrFD_W,FP2,False)
+ Totalize(1,SlrTF_MJ,IEEE4,False)
+ WindVector(1,WS_ms,WindDir,FP2,False,0,0,1)
+ Totalize(1,Invalid_Wind,FP2,False)
+ FieldNames("WS_ms_S_WVT,WindDir_D1_WVT")
+ Maximum(1,MaxWS_ms,FP2,False,True)
+ Average(1,AirT_C,FP2,False)
+ Maximum(1,AirT_C,FP2,False,True)
+ Minimum(1,AirT_C,FP2,False,True)
+ Average(1,VP_mbar,IEEE4,False)
+ Maximum(1,BP_mbar,IEEE4,False,True)
+ Minimum(1,BP_mbar,IEEE4,False,True)
+ Maximum(1,RH,FP2,False,False)
+ Minimum(1,RH,FP2,False,False)
+ Maximum(1,RHT_C,FP2,False,False)
+ Minimum(1,RHT_C,FP2,False,False)
+ Maximum(1,TiltNS_deg,FP2,False,True)
+ Minimum(1,TiltNS_deg,FP2,False,True)
+ Maximum(1,TiltWE_deg,FP2,False,True)
+ Minimum(1,TiltWE_deg,FP2,False,False)
+ Average(1,PAR_Den_C, FP2, 0)
+ Totalize(1, PAR_Tot_C, FP2, 0)  
+Sample(1,CVMeta,String)
+EndTable
+
+' Sapflow multiplexer
+Public Lcount
+Dim k, m
+
+'Saplow Data from Plant Senors Module
+Units DiffVoltA=mV
+Units DiffVoltB=mV
+
+' TEROS sesnors
+Public TerosA1(8,3)
+Public TerosB1(8,3)
+Public TerosC1(8,3)
+Public TerosA2(8,3)
+Public TerosB2(8,3)
+Public TerosC2(8,3)
+Public TerosA(8,3)
+Public TerosB(8,3)
+Public TerosC(8,3)
+
+'Aquatroll600A
+Public AquaTroll600A(18)
+Alias AquaTroll600A(1)= Barometric_Pressure600A
+Alias AquaTroll600A(2)= Temperature600A
+Alias AquaTroll600A(3)= Actual_Conductivity600A
+Alias AquaTroll600A(4)= Specific_Conductivity600A
+Alias AquaTroll600A(5)= Salinity600A
+Alias AquaTroll600A(6)= TDS600A
+Alias AquaTroll600A(7)= Water_Density600A
+Alias AquaTroll600A(8)= Resistivity600A
+Alias AquaTroll600A(9)= pH600A
+Alias AquaTroll600A(10)= pH_mV600A
+Alias AquaTroll600A(11)= pH_ORP600A
+Alias AquaTroll600A(12)= RDO_concen600A
+Alias AquaTroll600A(13)= RDO_perc_sat600A
+Alias AquaTroll600A(14)= RDO_part_Pressure600A
+Alias AquaTroll600A(15)= Pressure600A
+Alias AquaTroll600A(16)= Depth600A
+Alias AquaTroll600A(17)= Voltage_Ext600A
+Alias AquaTroll600A(18)= Battery_Int600A
+
+Units Barometric_Pressure600A= mmHg
+Units Temperature600A=  C
+Units Actual_Conductivity600A=  uS/cm
+Units Specific_Conductivity600A= uS/cm
+Units Salinity600A= PSU
+Units TDS600A= ppt
+Units Water_Density600A= g/cm3
+Units Resistivity600A= ohm-cm
+Units pH600A= pH
+Units pH_mV600A= mV
+Units pH_ORP600A = ORP- mV
+Units RDO_concen600A= mg/L
+Units RDO_perc_sat600A= %Sat
+Units RDO_part_Pressure600A= Torr
+Units Pressure600A= PSI
+Units Depth600A= cm
+Units Voltage_Ext600A= V
+Units Battery_Int600A= %
+
+'Aquatroll600A
+Public AquaTroll600B(18)
+Alias AquaTroll600B(1)= Barometric_Pressure600B
+Alias AquaTroll600B(2)= Temperature600B
+Alias AquaTroll600B(3)= Actual_Conductivity600B
+Alias AquaTroll600B(4)= Specific_Conductivity600B
+Alias AquaTroll600B(5)= Salinity600B
+Alias AquaTroll600B(6)= TDS600B
+Alias AquaTroll600B(7)= Water_Density600B
+Alias AquaTroll600B(8)= Resistivity600B
+Alias AquaTroll600B(9)= pH600B
+Alias AquaTroll600B(10)= pH_mV600B
+Alias AquaTroll600B(11)= pH_ORP600B
+Alias AquaTroll600B(12)= RDO_concen600B
+Alias AquaTroll600B(13)= RDO_perc_sat600B
+Alias AquaTroll600B(14)= RDO_part_Pressure600B
+Alias AquaTroll600B(15)= Pressure600B
+Alias AquaTroll600B(16)= Depth600B
+Alias AquaTroll600B(17)= Voltage_Ext600B
+Alias AquaTroll600B(18)= Battery_Int600B
+
+Units Barometric_Pressure600B= mmHg
+Units Temperature600B=  C
+Units Actual_Conductivity600B=  uS/cm
+Units Specific_Conductivity600B= uS/cm
+Units Salinity600B= PSU
+Units TDS600B= ppt
+Units Water_Density600B= g/cm3
+Units Resistivity600B= ohm-cm
+Units pH600B= pH
+Units pH_mV600B= mV
+Units pH_ORP600B = ORP- mV
+Units RDO_concen600B= mg/L
+Units RDO_perc_sat600B= %Sat
+Units RDO_part_Pressure600B= Torr
+Units Pressure600B= PSI
+Units Depth600B= cm
+Units Voltage_Ext600B= V
+Units Battery_Int600B= %
+
+'Aquatroll600C
+Public Aquatroll_IDA(2)As String ' serial ID for AQ units 
+Public Aquatroll_IDB(2)As String
+Public Aquatroll_IDC(2)As String 
+
+Public AquaTroll600C(18)
+Alias AquaTroll600C(1)= Barometric_Pressure600C
+Alias AquaTroll600C(2)= Temperature600C
+Alias AquaTroll600C(3)= Actual_Conductivity600C
+Alias AquaTroll600C(4)= Specific_Conductivity600C
+Alias AquaTroll600C(5)= Salinity600C
+Alias AquaTroll600C(6)= TDS600C
+Alias AquaTroll600C(7)= Water_Density600C
+Alias AquaTroll600C(8)= Resistivity600C
+Alias AquaTroll600C(9)= pH600C
+Alias AquaTroll600C(10)= pH_mV600C
+Alias AquaTroll600C(11)= pH_ORP600C
+Alias AquaTroll600C(12)= RDO_concen600C
+Alias AquaTroll600C(13)= RDO_perc_sat600C
+Alias AquaTroll600C(14)= RDO_part_Pressure600C
+Alias AquaTroll600C(15)= Pressure600C
+Alias AquaTroll600C(16)= Depth600C
+Alias AquaTroll600C(17)= Voltage_Ext600C
+Alias AquaTroll600C(18)= Battery_Int600C
+
+Units Barometric_Pressure600C= mmHg
+Units Temperature600C=  C
+Units Actual_Conductivity600C=  uS/cm
+Units Specific_Conductivity600C= uS/cm
+Units Salinity600C= PSU
+Units TDS600C= ppt
+Units Water_Density600C= g/cm3
+Units Resistivity600C= ohm-cm
+Units pH600C= pH
+Units pH_mV600C= mV
+Units pH_ORP600C = ORP- mV
+Units RDO_concen600C= mg/L
+Units RDO_perc_sat600C= %Sat
+Units RDO_part_Pressure600C= Torr
+Units Pressure600C= PSI
+Units Depth600C= cm
+Units Voltage_Ext600C= V
+Units Battery_Int600C= %
+
+'Define Data Tables
+DataTable(SapflowA,Flag(2),-1)
+	DataInterval(0,15,Min,10)
+	Sample(1, PB, FP2)
+  Sample(1, Statname, String)
+	Average(1,BattV,FP2,False)
+	Average(1,DiffVoltA(1),FP2,False)
+	Average(1,DiffVoltA(2),FP2,False)
+	Average(1,DiffVoltA(3),FP2,False)
+	Average(1,DiffVoltA(4),FP2,False)
+	Average(1,DiffVoltA(5),FP2,False)
+	Average(1,DiffVoltA(6),FP2,False)
+	Average(1,DiffVoltA(7),FP2,False)
+	Average(1,DiffVoltA(8),FP2,False)
+	Average(1,DiffVoltA(9),FP2,False)
+	Average(1,DiffVoltA(10),FP2,False)
+	Average(1,DiffVoltA(11),FP2,False)
+	Average(1,DiffVoltA(12),FP2,False)
+	EndTable
+
+DataTable(SapflowB,Flag(3),-1)
+	DataInterval(0,15,Min,10)
+	Sample(1, PB, FP2)
+  Sample(1, Statname, String)
+	Average(1,BattV,FP2,False)
+	Average(1,DiffVoltB(1),FP2,False)
+	Average(1,DiffVoltB(2),FP2,False)
+	Average(1,DiffVoltB(3),FP2,False)
+	Average(1,DiffVoltB(4),FP2,False)
+	Average(1,DiffVoltB(5),FP2,False)
+	Average(1,DiffVoltB(6),FP2,False)
+	Average(1,DiffVoltB(7),FP2,False)
+	Average(1,DiffVoltB(8),FP2,False)
+	Average(1,DiffVoltB(9),FP2,False)
+	Average(1,DiffVoltB(10),FP2,False)
+	Average(1,DiffVoltB(11),FP2,False)
+	Average(1,DiffVoltB(12),FP2,False)
+	EndTable
+
+' Teros12 data tables
+DataTable (TerosTableA,Flag(4),-1)
+  DataInterval (0,15,min,10)
+Sample(1, PB,FP2)
+Sample(1, Statname, String)
+Average(1,BattV,FP2,False)
+Sample(18, TerosA(1,1), IEEE4)
+EndTable
+
+DataTable (TerosTableB,Flag(5),-1)
+  DataInterval (0,15,min,10)
+Sample(1, PB,FP2)
+Sample(1, Statname, String)
+Average(1,BattV,FP2,False)
+Sample(18, TerosB(1,1), IEEE4)
+EndTable
+
+DataTable (TerosTableC,Flag(6),-1)
+  DataInterval (0,15,min,10)
+Sample(1, PB,FP2)
+Sample(1, Statname, String)
+Sample(18, TerosC(1,1), IEEE4)
+EndTable
+
+DataTable (WaterLevel600A,Flag(7),-1)
+DataInterval (0,15,min,10)
+Sample(1, PB,FP2)
+Sample(1, Statname, String)
+Sample (1, Aquatroll_IDA(1), String) 
+Sample(1, Barometric_Pressure600A,IEEE4) ' mmHg
+Sample(1, Temperature600A,IEEE4) '  C
+Sample(1, Actual_Conductivity600A,IEEE4) '  uS/cm
+Sample(1, Specific_Conductivity600A,IEEE4) ' uS/cm
+Sample(1, Salinity600A,IEEE4) ' PSU
+Sample(1, TDS600A,IEEE4) ' ppt
+Sample(1, Water_Density600A,IEEE4) ' g/cm3
+Sample(1, Resistivity600A,IEEE4) ' ohm-cm
+Sample(1, pH600A,IEEE4) ' pH
+Sample(1, pH_mV600A,IEEE4) ' mV
+Sample(1, pH_ORP600A ,IEEE4) ' ORP- mV
+Sample(1, RDO_concen600A,IEEE4) ' mg/L
+Sample(1, RDO_perc_sat600A,IEEE4) ' %Sat
+Sample(1, RDO_part_Pressure600A,IEEE4) ' Torr
+Sample(1, Pressure600A,IEEE4) ' PSI
+Sample(1, Depth600A,IEEE4) ' ft
+Sample(1, Voltage_Ext600A,IEEE4) ' V
+Sample(1, Battery_Int600A,IEEE4) ' %
+EndTable
+
+DataTable (WaterLevel600B,Flag(8),-1)
+DataInterval (0,15,min,10)
+Sample(1, PB,FP2)
+Sample(1, Statname, String)
+Sample (1, Aquatroll_IDB(1), String) 
+Sample(1, Barometric_Pressure600B,IEEE4) ' mmHg
+Sample(1, Temperature600B,IEEE4) '  C
+Sample(1, Actual_Conductivity600B,IEEE4) '  uS/cm
+Sample(1, Specific_Conductivity600B,IEEE4) ' uS/cm
+Sample(1, Salinity600B,IEEE4) ' PSU
+Sample(1, TDS600B,IEEE4) ' ppt
+Sample(1, Water_Density600B,IEEE4) ' g/cm3
+Sample(1, Resistivity600B,IEEE4) ' ohm-cm
+Sample(1, pH600B,IEEE4) ' pH
+Sample(1, pH_mV600B,IEEE4) ' mV
+Sample(1, pH_ORP600B ,IEEE4) ' ORP- mV
+Sample(1, RDO_concen600B,IEEE4) ' mg/L
+Sample(1, RDO_perc_sat600B,IEEE4) ' %Sat
+Sample(1, RDO_part_Pressure600B,IEEE4) ' Torr
+Sample(1, Pressure600B,IEEE4) ' PSI
+Sample(1, Depth600B,IEEE4) ' ft
+Sample(1, Voltage_Ext600B,IEEE4) ' V
+Sample(1, Battery_Int600B,IEEE4) ' %
+EndTable
+
+DataTable (WaterLevel600C,Flag(9),-1)
+DataInterval (0,15,min,10)
+Sample(1, PB,FP2)
+Sample(1, Statname, String)
+Sample (1, Aquatroll_IDC(1), String) 
+Sample(1, Barometric_Pressure600C,IEEE4) ' mmHg
+Sample(1, Temperature600C,IEEE4) '  C
+Sample(1, Actual_Conductivity600C,IEEE4) '  uS/cm
+Sample(1, Specific_Conductivity600C,IEEE4) ' uS/cm
+Sample(1, Salinity600C,IEEE4) ' PSU
+Sample(1, TDS600C,IEEE4) ' ppt
+Sample(1, Water_Density600C,IEEE4) ' g/cm3
+Sample(1, Resistivity600C,IEEE4) ' ohm-cm
+Sample(1, pH600C,IEEE4) ' pH
+Sample(1, pH_mV600C,IEEE4) ' mV
+Sample(1, pH_ORP600C ,IEEE4) ' ORP- mV
+Sample(1, RDO_concen600C,IEEE4) ' mg/L
+Sample(1, RDO_perc_sat600C,IEEE4) ' %Sat
+Sample(1, RDO_part_Pressure600C,IEEE4) ' Torr
+Sample(1, Pressure600C,IEEE4) ' PSI
+Sample(1, Depth600C,IEEE4) ' ft
+Sample(1, Voltage_Ext600C,IEEE4) ' V
+Sample(1, Battery_Int600C,IEEE4) ' %
+EndTable
+
+
+'EXO2 variables
+Public EXO(26) 'was 27 
+Public EXO2(4)As String *72 
+
+'Sonde array definition
+Public Sonde_data As String *1000  'SNs
+Public Sonde_data2 As String *1000  'SNs
+
+Public pSonde_data As String *1000  'SNs
+Public pSonde_data2 As String *1000  'SNs
+
+'Alias declaration EXO
+Alias EXO(1)=Date
+Alias EXO(2)=Time
+''Alias EXO(3)=Chlorophyll_RFU  
+''Alias EXO(4)=Chlorophyll_ugL
+Alias EXO(3)=Conductivity 'was 5
+Alias EXO(4)=FDOM_QSU
+Alias EXO(5)=FDOM_RFU
+Alias EXO(6)=NLF_conductivity
+Alias EXO(7)=ODO_sat
+Alias EXO(8)=ODO_local
+Alias EXO(9)=ODO_MgL
+Alias EXO(10)=Pressure_psia
+Alias EXO(11)=Salinity_PPT
+Alias EXO(12)=Specific_Conductivity_uScm
+''Alias EXO(15)=BGA_PE_RFU
+''Alias EXO(16)=BGA_PE_ugL
+''Alias EXO(17)=TDS_mg_L
+''Alias EXO(18)=Turbidity_FNU
+''Alias EXO(19)=TSS_MgL
+Alias EXO(13)=Wiper_Position_mv
+Alias EXO(14)=pH
+Alias EXO(15)=pH_mv
+Alias EXO(16)=Temp_C
+Alias EXO(17)=Depth_m
+Alias EXO(18)=Battery_v
+Alias EXO(19)=Cable_v
+Alias EXO(20)=Wiper_Current_ma
+Alias EXO(21)=TSS_MgL
+Alias EXO(22)=ORP_mv
+Alias EXO(23)=TDS_mg_L
+Alias EXO(24)=Vertical_Position_m
+Alias EXO(25)=Turbidity_FNU
+Alias EXO(26)=Turbidity_Raw
+
+
+
+' Unit declaration EXO2
+Units Date = mmddyy
+Units Time = hhmmss
+'Units Chlorophyll_RFU = RFU
+''Units Chlorophyll_ugL = ug/L
+Units Conductivity = uS/cm
+Units FDOM_QSU = QSU
+Units FDOM_RFU = RFU
+Units NLF_conductivity = uS/cm 
+Units ODO_sat = %Sat
+Units ODO_local = %SatLocal
+Units ODO_MgL = mg/L
+Units Pressure_psia =psia
+Units Salinity_PPT =ppt
+Units Specific_Conductivity_uScm =uS/cm
+'Units BGA_PE_RFU = RFU
+'Units BGA_PE_ugL =ug/L
+Units TDS_mg_L = mg/L
+Units Turbidity_FNU = FNU
+Units Turbidity_Raw = na
+
+Units Wiper_Position_mv =mv
+Units pH = pH
+Units pH_mv = mv
+Units Temp_C = Celsius
+Units Depth_m = meters
+Units Battery_v = volts
+Units Cable_v= volts
+Units Wiper_Current_ma= ma
+Units TSS_MgL = mg/L 
+Units ORP_mv= mv
+Units Vertical_Position_m= m
+
+' Alias declaration EXO2 retain sensors data with Loggernet data
+Alias EXO2(1)=sn 
+Alias EXO2(2)=snn
+
+'---------Site Checks-------------'
+DataTable(CheckTable,TRUE),-1) ' Table for diagnostics
+DataInterval (0,15,Min,10) 
+Sample (1, BattV, FP2)
+Sample (1, SolarV, FP2)
+Sample (1, Batt_CHECK, String)
+Sample (1, Solar_Check, String)
+Sample (14, Flag(1), Boolean)
+Sample (1, Statname, String)
+Sample (1, PB,FP2)
+EndTable
+
+'------------ExoTable----------------
+DataTable(ExoTable,Flag(10),-1)
+DataInterval (0,15,Min,10) 
+Sample(1, PB,FP2)
+Sample(1, Statname, String)
+Sample(1,Date,IEEE4)
+Sample(1,Time,IEEE4)
+'Sample(1,Chlorophyll_RFU,IEEE4)
+'Sample(1,Chlorophyll_ugL,IEEE4)
+Sample(1,Conductivity,IEEE4)
+Sample(1,FDOM_QSU,IEEE4)
+Sample(1,FDOM_RFU,IEEE4)
+Sample(1,NLF_conductivity,IEEE4)
+Sample(1,ODO_sat,IEEE4)
+Sample(1,ODO_local,IEEE4)
+Sample(1,ODO_MgL,IEEE4)
+Sample(1,Pressure_psia,IEEE4)
+Sample(1,Salinity_PPT,IEEE4)
+Sample(1,Specific_Conductivity_uScm,IEEE4)
+'Sample(1,BGA_PE_RFU,IEEE4)
+'Sample(1,BGA_PE_ugL,IEEE4)
+'Sample(1,TDS_mg_L,IEEE4)
+'Sample(1,Turbidity_FNU,IEEE4)
+Sample(1,Wiper_Position_mv,IEEE4)
+Sample(1,pH,IEEE4)
+Sample(1,pH_mv,IEEE4)
+Sample(1,Temp_C,IEEE4)
+Sample(1,Depth_m,IEEE4)
+Sample(1, Battery_v,IEEE4)
+Sample(1, Cable_v,IEEE4)
+Sample(1, Wiper_Current_ma,IEEE4)
+Sample (1,sn,String)
+Sample (1,snn,String)
+Sample (1, TSS_MgL,IEEE4)
+Sample (1, ORP_mv,IEEE4)
+Sample (1, TDS_mg_L,IEEE4)
+Sample (1, Vertical_Position_m,IEEE4)
+Sample (1, Turbidity_FNU,IEEE4)
+Sample (1, Turbidity_Raw,IEEE4)
+EndTable
+
+
+'Main Program
+SequentialMode 'program runs sequentially
+PreserveVariables  ' program starts with same flag configuration and otehr variables if power is lost
+BeginProg
+
+	  Statname=Status.StationName(1,1) ' station name
+	  PB = Status.PakbusAddress(1,1)  ' pakbus address
+
+' Flag(1) ClimaVue and Par
+' Flag(2) SapflowA
+' Flag(3) SapflowB
+' Flag(4) TEROSA
+' Flag(5) TEROSB
+' Flag(6) TEROSC
+' Flag(7) AQ600A
+' Flag(8) AQ600B
+' Flag(9) AQ600C
+' Flag(10) EXO2Sonde
+
+'MSM 401	LI-COR	Q114236			Calibration multiplier: 145.92 umol s-1 m-2 per microamp
+'CRC 311 LI-COR	Q114233			Calibration multiplier: 148.53 umol s-1 m-2 per microamp
+'OWC 321	LI-COR	Q114237			Calibration multiplier: 149.85 umol s-1 m-2 per microamp
+'PTR 301 LI-COR	Q114235			Calibration multiplier: 144.24 umol s-1 m-2 per microamp
+'GWI 411	LI-COR	Q114234			Calibration multiplier: 149.44 umol s-1 m-2 per microamp
+'SWH 421 LI-COR 
+
+'constants for PAR calcuations detemined for each pakbus; for larger networks, move to configuration table 
+If PB = 301 Then Par2C = 144.24
+If PB = 311 Then Par2C = 148.53
+If PB = 321 Then PAR2C = 149.85
+If PB = 401 Then PAR2C = 145.92
+If PB = 411 Then Par2C = 149.44
+If PB = 421 Then Par2C = 151.93
+
+' control code for running instrument modules
+
+If PB = 301 OR PB = 311 OR PB = 321 OR PB = 401 OR PB = 411 OR PB = 421 OR PB = 431  ' wetland nodes
+Flag(1)= -1
+Flag(6)= -1
+Flag(9)= -1
+Flag(10)= -1
+EndIf
+
+If PB = 302 OR PB = 312 OR PB = 322 OR  PB = 402 OR PB = 412 OR PB = 422  OR PB = 432 'transition nodes
+Flag(3)= -1
+Flag(5)= -1
+Flag(8)= -1
+'Flag(10)= -1
+EndIf
+
+If PB = 303 OR PB = 313 OR PB = 323 OR  PB = 403 OR PB = 413 OR PB = 423 OR PB = 433  'upland nodes
+Flag(2)= -1
+Flag(4)= -1
+Flag(7)= -1
+'Flag(10)= -1
+EndIf
+
+' 3/24 add satelite upland site to SWH upland to turn on additona AQ800 and Teros modules
+If PB = 423
+Flag(8)=-1
+Flag(5)=-1
+EndIf 
+
+' Turn on switchable power supplies, reset relay attached to the SW12 to communcation reset 
+SW12(SW12_1,1)
+SW12(SW12_2,1)  	
+
+
+	'Main Scan
+Scan(60,Sec,1,0)
+
+		'Default CR1000 Datalogger Battery Voltage measurement 'BattV'
+		Battery(BattV)
+		  If BattV >= 12 Then Batt_CHECK = "OKAY" Else Batt_CHECK ="LOW"
+		 
+    VoltDiff (SolarV,1,mV5000,8,True ,0,60,.01,0)' MUST USE VD10 voltage divider in DIF8 channel
+    If SolarV >= 24 Then Solar_CHECK = "OKAY" Else Solar_CHECK ="LOW"
+    
+		'Default CR1000 Datalogger Wiring Panel Temperature measurement 'PTemp_C'
+		PanelTemp(PTemp_C,_60Hz)
+
+'LI190R Quantum Sensor measurements PAR_Tot and PAR_Den:
+      VoltDiff(PAR_Den_C,1,mV200,1,True,0,_60Hz,1,0) 'Use 20 mV range for CR3000, CR5000
+      'Set negative values to zero
+      If PAR_Den_C<0 Then PAR_Den_C=0
+      PAR_Tot_C= PAR_Den_C* (Par2C /1000) *60 ' 60 is scan rate and needs to be changed with program changes
+      PAR_Den_C= PAR_Den_C* Par2C 'Multipliers will differ for each sensor and scan rate
+      
+'ClimaVue50
+If IfTime(0,1,Day) Then
+			SDI12Recorder(CVMeta,C1,"0","I!",1,0)
+		EndIf
+		'ClimaVUE50 Compact Digital Weather Sensor measurements
+		'SlrFD_W', 'Rain_mm', 'Strikes', 'Dist_km', 'WS_ms', 'WindDir',
+		'MaxWS_ms', 'AirT_C', 'VP_mbar', BP_mbar', 'RH', 'RHT_C',
+		'TiltNS_deg', and 'TiltWE_deg'
+		'The datalogger program execution rate (scan rate) is less than ten seconds. The ClimaVUE50 Compact Digital Weather Sensor requires ten seconds to respond with
+		'measurements. The following SDI12Recorder instruction will only be executed/measured every ten seconds because of the 'If TimeIntoInterval' block surrounding it.
+		'SlrTF_MJ', 'Rain_mm', and 'Strikes' must be zeroed every scan so old/stale measurements are not included multiple times in totals in stored output tables.
+		'Average, maximum, minimum, and other outputs will not be statistically impacted by the old/stale measurements of other ClimaVUE50 Compact Digital Weather Sensor measurements.
+		SlrTF_MJ=0
+		Rain_mm=0
+		Strikes=0
+			'Get data from ClimaVUE50 Compact Digital Weather Sensor
+			SDI12Recorder(CVData(),C1,"0","R7!",1,0,-1)
+			'Convert fractional relative humidity into percent relative humidity
+			RH=RH*100
+			'Calculate total solar flux in MJ/m^2 from flux density in W/m^
+			SlrTF_MJ=SlrFD_W*5E-06
+			'Convert vapor pressure in kPa to mbar
+			VP_mbar=VP_mbar*10
+			'Convert barometric pressure in kPa to mbar
+			BP_mbar=BP_mbar*10
+			'High winds with rain can temporarily interfere with sonic wind measurements causing the sensor to output -9999 or -9990. The following instructions set invalid wind measurements
+			'to the previous valid wind measurements. This will 'flat-line' the measurements until the sensor is able to make good readings again. The Invalid_Wind variable will be set to 1 when
+			'a wind measurement is invalid. For troubleshooting purposes, it is highly recommended that you totalize the Invalid_Wind variable in any output tables you define that include
+			'wind speed and/or direction data from the ClimaVUE50.
+			If WS_ms<0 Then
+				WS_ms=WSPrev
+				WindDir=WindDirPrev
+				MaxWS_ms=MaxWSprev
+				Invalid_Wind=1
+			Else
+				WSPrev=WS_ms
+				WindDirPrev=WindDir
+				MaxWSprev=MaxWS_ms
+				Invalid_Wind=0
+			EndIf
+		
+' Multiplexer A sapflow
+If Flag(2)=-1
+PortSet(C4,1)
+Delay(0,1000,mSec)
+Lcount=1
+SubScan(1000,msec,12)
+PulsePort(C2,20000)
+'Switch to next AM16/32 Multiplexer channel
+VoltDiff (DiffVoltA(Lcount),1,mV1000C,3,True,0,60,1,0)
+Lcount=Lcount+1
+NextSubScan
+PortSet(C4,0)
+EndIf
+
+' Multiplexer B sapflow
+If Flag(3)=-1
+PortSet(C6,1)
+Delay(0,1000,mSec)
+Lcount=1
+SubScan(1000,msec,12)
+PulsePort(C2,20000)
+'Switch to next AM16/32 Multiplexer channel
+VoltDiff (DiffVoltB(Lcount),1,mV1000C,3,True,0,60,1,0)
+Lcount=Lcount+1
+NextSubScan
+PortSet(C6,0)
+EndIf
+
+' Occasional power off every 6 hrs For TEROS AND AQ800 Units AND reset of radio modules
+ If TimeIntoInterval(0,216000,sec)
+SW12(SW12_1,0)
+SW12(SW12_2,0)  	
+EndIf
+
+If TimeIntoInterval(0,216060,Sec)
+SW12(SW12_1,1)
+SW12(SW12_2,1)  	
+EndIf
+
+' AQ600 modules
+   
+If TimeIntoInterval (3,5,min) AND Flag(7)=-1 ' loggers with 600s
+   SDI12Recorder (AquaTroll600A(1),c1,"7","C!",1.0,0,-1,1)
+   SDI12Recorder (Aquatroll_IDA(1),c1,"7","I!",1.0,0)
+EndIf    
+
+If TimeIntoInterval(1,5,min) AND Flag(8)=-1 ' loggers with 600s
+   SDI12Recorder (AquaTroll600B(1),c1,"8","C!",1.0,0,-1,1)
+   SDI12Recorder (Aquatroll_IDB(1),c1,"8","I!",1.0,0)
+EndIf    
+
+If TimeIntoInterval (2,5,min) AND Flag(9)=-1 ' loggers with 600s
+   SDI12Recorder (AquaTroll600C(1),c1,"9","C!",1.0,0,-1,1)
+   SDI12Recorder (Aquatroll_IDC(1),c1,"9","I!",1.0,0)
+EndIf    
+
+' TEROS modules 
+
+If TimeIntoInterval(1,5,min) AND Flag(4)=-1
+SDI12Recorder (TerosA1(1,1),C3,"1","M!",1.0,0,-1,1)' 
+SDI12Recorder (TerosA1(2,1),C3,"2","M!",1.0,0,-1,1)
+SDI12Recorder (TerosA1(3,1),C3,"3","M!",1.0,0,-1,1)
+SDI12Recorder (TerosA1(4,1),C3,"4","M!",1.0,0,-1,1)
+SDI12Recorder (TerosA1(5,1),C3,"5","M!",1.0,0,-1,1)
+SDI12Recorder (TerosA1(6,1),C3,"6","M!",1.0,0,-1,1)
+
+' In case 2nd control channel needed to do sensor diagnostics
+'SDI12Recorder (TerosA2(1,1),c5,"1","M!",1.0,0,-1,1)' 
+'SDI12Recorder (TerosA2(2,1),c5,"2","M!",1.0,0,-1,1)
+'SDI12Recorder (TerosA2(3,1),c5,"3","M!",1.0,0,-1,1)
+'SDI12Recorder (TerosA2(4,1),c5,"4","M!",1.0,0,-1,1)
+'SDI12Recorder (TerosA2(5,1),c5,"5","M!",1.0,0,-1,1)
+'SDI12Recorder (TerosA2(6,1),c5,"6","M!",1.0,0,-1,1)
+EndIf
+
+
+If TimeIntoInterval(2,5,min) AND Flag(5)=-1
+' In case 2nd control channel needed to do sensor diagnostics changed to add SWH extra upland sites in 2023
+'SDI12Recorder (TerosB1(1,1),c3,"1","M!",1.0,0,-1,1)' 
+'SDI12Recorder (TerosB1(2,1),c3,"2","M!",1.0,0,-1,1)
+'SDI12Recorder (TerosB1(3,1),c3,"3","M!",1.0,0,-1,1)
+'SDI12Recorder (TerosB1(4,1),c3,"4","M!",1.0,0,-1,1)
+'SDI12Recorder (TerosB1(5,1),c3,"5","M!",1.0,0,-1,1)
+'SDI12Recorder (TerosB1(6,1),c3,"6","M!",1.0,0,-1,1)
+
+SDI12Recorder (TerosB2(1,1),c5,"1","M!",1.0,0,-1,1)' 
+SDI12Recorder (TerosB2(2,1),c5,"2","M!",1.0,0,-1,1)
+SDI12Recorder (TerosB2(3,1),c5,"3","M!",1.0,0,-1,1)
+SDI12Recorder (TerosB2(4,1),c5,"4","M!",1.0,0,-1,1)
+SDI12Recorder (TerosB2(5,1),c5,"5","M!",1.0,0,-1,1)
+SDI12Recorder (TerosB2(6,1),c5,"6","M!",1.0,0,-1,1)
+EndIf
+
+If TimeIntoInterval(0,5,min) AND Flag(6)=-1
+SDI12Recorder (TerosC1(1,1),c3,"1","M!",1.0,0,-1,1)' 
+SDI12Recorder (TerosC1(2,1),c3,"2","M!",1.0,0,-1,1)
+SDI12Recorder (TerosC1(5,1),c3,"5","M!",1.0,0,-1,1)
+SDI12Recorder (TerosC1(6,1),c3,"6","M!",1.0,0,-1,1)
+
+SDI12Recorder (TerosC2(1,1),c5,"1","M!",1.0,0,-1,1)' 
+SDI12Recorder (TerosC2(2,1),c5,"2","M!",1.0,0,-1,1)
+SDI12Recorder (TerosC2(5,1),c5,"5","M!",1.0,0,-1,1)
+SDI12Recorder (TerosC2(6,1),c5,"6","M!",1.0,0,-1,1)
+EndIf
+
+
+For k = 1 To 6 Step 1
+For m = 1 To 3 Step 1 
+
+' This codes allows channel swapping for testing of solving splitting sensors
+'If TerosA1 (k,m) = 0
+'TerosA(k,m) = TerosA2 (k,m)
+'Else 
+'TerosA(k,m) = TerosA1 (k,m)
+'EndIf
+'
+'If TerosB1 (k,m) = 0
+'TerosB(k,m) = TerosB2 (k,m)
+'Else 
+'TerosB(k,m) = TerosB1 (k,m)
+'EndIf
+'
+'If TerosC1 (k,m) = 0
+'TerosC(k,m) = TerosC2 (k,m)
+'Else 
+'TerosC(k,m) = TerosC1 (k,m)
+'EndIf
+
+' This codes allows channel swapping for testing of solving splitting sensors
+If TerosA1 (k,m) = NAN
+TerosA(k,m) = TerosA2 (k,m)
+Else 
+TerosA(k,m) = TerosA1 (k,m)
+EndIf
+
+If TerosB1 (k,m) = NAN
+TerosB(k,m) = TerosB2 (k,m)
+Else 
+TerosB(k,m) = TerosB2 (k,m)' changed for SWH upland site
+EndIf
+
+If TerosC1 (k,m) = NAN
+TerosC(k,m) = TerosC2 (k,m)
+Else 
+TerosC(k,m) = TerosC1 (k,m)
+EndIf
+
+Next k
+Next m 
+
+
+' EXO2SONDE via RS232
+If IfTime (0,5,min) AND Flag(10) =-1
+' NEW START
+
+SerialOpen (ComC7,9600,0,0,2500,0)           'ComPort, Baud Rate ()
+    SerialOut (ComC7,"0" + CHR(13),"?Command",3,10)       'ComPort, Output String (Charater 13 = ^M)
+    Delay (1,500,mSec)
+    SerialOut (ComC7,"ssn" + CHR(13) + CHR(10),"",1,0)    'Charater 10 = ^J, Line feed (LF).
+    Delay (1,500,mSec)
+    SerialIn (EXO2(2),ComC7,100,&H0D0A,2000)             'Destination (Raw EXO Data String)
+     
+    SerialOut (ComC7,"0" + CHR(13),"?Command",3,10)       'ComPort, Output String (Charater 13 = ^M)
+    Delay (1,500,mSec)
+    SerialOut (ComC7,"sn" + CHR(13) + CHR(10),"",1,0)    'Charater 10 = ^J, Line feed (LF).
+    Delay (1,500,mSec)
+    SerialIn (EXO2(1),ComC7,100,&H0D0A,2000)             'Destination (Raw EXO Data String)
+    Delay (1,500,mSec)
+    
+    
+    SerialOut (ComC7,"0" + CHR(13),"?Command",3,10)       'ComPort, Output String (Charater 13 = ^M)
+    Delay (1,500,mSec)
+    SerialOut (ComC7,"para 52 54 4 228 227 237 211 214 212 20 12 6 229" + CHR(13) + CHR(10),"",1,0)    'Charater 10 = ^J, Line feed (LF). 
+    'SerialOut (ComC7,"para 52 54 194 193 4 228 227 237 211 214 212 20 12" + CHR(13) + CHR(10),"",1,0)    'Charater 10 = ^J, Line feed (LF).
+
+'2022 parameter order from YSI EXO2 manual
+ '52 54 4 228 227 237 211 214 212 20 12 6 229     
+ '18 17 1 22 28 230 239 190 19 110 240 223 224  
+    
+ '194 and 193 removed
+ 
+    Delay (1,500,mSec)
+    SerialOut (ComC7,"0" + CHR(13),"?Command",3,10)       'ComPort, Output String (Charater 13 = ^M)
+    Delay (1,500,mSec)
+    SerialOut (ComC7,"data" + CHR(13) + CHR(10),"",1,0)    'Charater 10 = ^J, Line feed (LF).
+    Delay (1,500,mSec)
+    SerialIn (Sonde_data,ComC7,100,&H0D0A,1000)             'Destination (Raw EXO Data String)
+    Delay (1,500,mSec)   
+    'SerialFlush (ComC7) 
+    SerialOut (ComC7,"0" + CHR(13),"?Command",3,10)       'ComPort, Output String (Charater 13 = ^M)
+    Delay (1,500,mSec)
+    SerialOut (ComC7,"para 18 17 1 22 28 230 239 190 19 110 240 223 224" + CHR(13) + CHR(10),"",1,0)    'Charater 10 = ^J, Line feed (LF).
+
+SerialOut (ComC7,"para 6 218 226 110 223 190 229 18 17 1 22 28 230 239" + CHR(13) + CHR(10),"",1,0)    'Charater 10 = ^J, Line feed (LF).
+       '218, 226, 110, 223, 190 removed
+      
+    Delay (1,500,mSec)
+    SerialOut (ComC7,"0" + CHR(13),"?Command",3,10)       'ComPort, Output String (Charater 13 = ^M)
+    Delay (1,500,mSec)
+    SerialOut (ComC7,"data" + CHR(13) + CHR(10),"",1,0)    'Charater 10 = ^J, Line feed (LF).
+    Delay (1,500,mSec)
+    SerialIn (Sonde_data2,ComC7,100,&H0D0A,2000)             'Destination (Raw EXO Data String)
+    Delay (1,500,mSec)
+   
+    pSonde_data2 = Sonde_data2  
+    pSonde_data = Sonde_data   
+    Sonde_data = Trim(Sonde_data)                                          'Copies String with no leading or trailing charaters.
+    Sonde_data2 = Trim(Sonde_data2)                                          'Copies String with no leading or trailing charaters.  
+   
+    SplitStr (EXO(1),Sonde_data," ",13,0)
+    SplitStr (EXO(14),Sonde_data2," ",13,0)
+  
+    SerialFlush (ComC7)                                                        'Clears data from buffer
+    SerialClose (ComC7)
+
+EndIf
+
+ CallTable ClimaVue50_15min
+ CallTable ClimaVue50_24hr
+ 
+ CallTable TEROStableA
+ CallTable TEROStableB
+ CallTable TEROStableC
+ 
+ CallTable SapflowA
+ CallTable SapflowB
+
+ CallTable Waterlevel600A
+ CallTable Waterlevel600B
+ CallTable Waterlevel600C
+ 
+CallTable ExoTable
+CallTable CheckTable
+NextScan
+EndProg

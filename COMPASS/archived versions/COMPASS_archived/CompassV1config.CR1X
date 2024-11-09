@@ -1,0 +1,58 @@
+'CONFIG FILE THAT ORGANIZES COMPASS CONFIGURATIONS SAURON WITH NECESSARY POWER TO RULE THEM ALL
+' revised on 1/20/2022
+
+
+'Flag(1)' ClimaVue Met Station 
+
+'Flag(2)' Sapflow_A muiltiplexer system (3 modules)
+'Flag(3) 'Sapflow_B muiltiplexer system (3 modules)
+'Flag(4) 'Sapflow_C muiltiplexer system (3 modules)
+
+'Flag(5)' TEROS_A muiltiplexer system (3 modules)
+'Flag(6) 'TEROS_B muiltiplexer system (3 modules)
+'Flag(7) 'TEROS_C muiltiplexer system (3 modules)
+
+'Flag(8)' Aquatroll200_A (2 modules)
+'Flag(9)  Aquatroll200_B (2 modules)
+
+'Flag(8)' Aquatroll600_A (2 modules)
+'Flag(9)  Aquatroll600_B (2 modules)
+
+' Pakbus address registry
+
+'Lake Erie
+
+'OWC- 101,102,103 PB IDs
+'PRR- 111,112,113 
+'XXX- 121,122,123
+
+'Cheasapeake Bay PB IDs
+'MDC -201,202,203
+'GOI -211,212,213 
+'SGM -221,222,223
+
+
+Select Case PB  
+    Case PB = 1
+Flag(1) = -1' ClimaVue Met Station 
+
+Flag(2)= -1' Sapflow_A muiltiplexer system (3 modules)
+Flag(3)= -1 'Sapflow_B muiltiplexer system (3 modules)
+Flag(4)= -1 'Sapflow_C muiltiplexer system (3 modules)
+
+Flag(5)= -1' TEROS_A muiltiplexer system (3 modules)
+Flag(6)= -1 'TEROS_B muiltiplexer system (3 modules)
+Flag(7)= -1 'TEROS_C muiltiplexer system (3 modules)
+
+Flag(8)= -1'Aquatroll200_A (2 modules)
+Flag(9)= -1 'Aquatroll200_B (2 modules)
+
+Flag(10)= -1'Aquatroll600_A (2 modules)
+Flag(11)= -1 'Aquatroll600_B (2 modules)
+       
+   
+Case PB = 2 
+
+Case PB = 3
+  
+EndSelect

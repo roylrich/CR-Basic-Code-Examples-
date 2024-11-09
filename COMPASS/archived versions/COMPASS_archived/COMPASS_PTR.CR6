@@ -1,0 +1,236 @@
+'CR6 Datalogger
+
+'Date: 6/20/2022
+'Program author: Roy RIch and Matt Kovach
+
+'Declare Constants
+'Example:
+'CONST PI = 3.141592654
+' control port allocation- these collect data and are limited.
+'c1 aquatrolls/ climavue
+'c2 clock am16/32
+'c3  teros1 sdi12
+'c4  reset multiplexerA
+'c5  teros2 sdi12 
+'c6  reset multiplexerB
+'c7- sondeRX
+'c8- sondeTX
+
+'Declare Variables and Units
+Public BattV
+Public PTemp_C
+
+Public Flag(14)As Boolean
+' Flag(1) ClimaVue and Par
+' Flag(2) SapflowA
+' Flag(3) SapflowB
+' Flag(4) TEROSA
+' Flag(5) TEROSB
+' Flag(6) TEROSC
+' Flag(7) AQ600A
+' Flag(8) AQ600B
+' Flag(9) AQ600C
+' Flag(10) EXO2Sonde
+
+'Public Mult(14)={1,1,1,1,1,1,1,1,1,1,1,1,1,1}
+'Public Offs(14)={0,0,0,0,0,0,0,0,0,0,0,0,0,0}
+Public Statname As String ' logger name
+Public PB ' packbus number of logger
+'Public Batt_CHECK As String
+
+'EXO2 variables
+Public EXO(20) 'was 27 
+Public EXO2(4)As String *72 
+
+'Sonde array definition
+Public Sonde_data As String *1000  'SNs
+Public Sonde_data2 As String *1000  'SNs
+
+Public pSonde_data As String *1000  'SNs
+Public pSonde_data2 As String *1000  'SNs
+
+'Alias declaration EXO
+Alias EXO(1)=Date
+Alias EXO(2)=Time
+''Alias EXO(3)=Chlorophyll_RFU  
+''Alias EXO(4)=Chlorophyll_ugL
+Alias EXO(3)=Conductivity 'was 5
+Alias EXO(4)=FDOM_QSU
+Alias EXO(5)=FDOM_RFU
+Alias EXO(6)=NLF_conductivity
+Alias EXO(7)=ODO_sat
+Alias EXO(8)=ODO_local
+Alias EXO(9)=ODO_MgL
+Alias EXO(10)=Pressure_psia
+Alias EXO(11)=Salinity_PPT
+Alias EXO(12)=Specific_Conductivity_uScm
+''Alias EXO(15)=BGA_PE_RFU
+''Alias EXO(16)=BGA_PE_ugL
+''Alias EXO(17)=TDS_mg_L
+''Alias EXO(18)=Turbidity_FNU
+''Alias EXO(19)=TSS_MgL
+Alias EXO(13)=Wiper_Position_mv
+Alias EXO(14)=pH
+Alias EXO(15)=pH_mv
+Alias EXO(16)=Temp_C
+Alias EXO(17)=Depth_m
+Alias EXO(18)=Battery_v
+Alias EXO(19)=Cable_v
+Alias EXO(20)=Wiper_Current_ma
+
+' Unit declaration EXO2
+Units Date = mmddyy
+Units Time = hhmmss
+'Units Chlorophyll_RFU = RFU
+''Units Chlorophyll_ugL = ug/L
+Units Conductivity = uS/cm
+Units FDOM_QSU = QSU
+Units FDOM_RFU = RFU
+Units NLF_conductivity = uS/cm 
+Units ODO_sat = %Sat
+Units ODO_local = %SatLocal
+Units ODO_MgL = mg/L
+Units Pressure_psia =psia
+Units Salinity_PPT =ppt
+Units Specific_Conductivity_uScm =uS/cm
+'Units BGA_PE_RFU = RFU
+'Units BGA_PE_ugL =ug/L
+'Units TDS_mg_L = mg/L
+'Units Turbidity_FNU = FNU
+Units Wiper_Position_mv =mv
+Units pH = pH
+Units pH_mv = mv
+Units Temp_C = Celsius
+Units Depth_m = meters
+Units Battery_v = volts
+Units Cable_v= volts
+Units Wiper_Current_ma= ma
+'Units TSS_MgL = mg/L ' not currently measured at dock - do we want to keep this in new program?
+
+' Alias declaration EXO2
+Alias EXO2(1)=sn 
+Alias EXO2(2)=snn
+
+'------------ExoTable----------------
+DataTable(ExoTable,Flag(10),-1)
+DataInterval (0,15,Min,10) 
+Sample(1, PB,FP2)
+Sample(1, Statname, String)
+Sample(1,Date,IEEE4)
+Sample(1,Time,IEEE4)
+'Sample(1,Chlorophyll_RFU,IEEE4)
+'Sample(1,Chlorophyll_ugL,IEEE4)
+Sample(1,Conductivity,IEEE4)
+Sample(1,FDOM_QSU,IEEE4)
+Sample(1,FDOM_RFU,IEEE4)
+Sample(1,NLF_conductivity,IEEE4)
+Sample(1,ODO_sat,IEEE4)
+Sample(1,ODO_local,IEEE4)
+Sample(1,ODO_MgL,IEEE4)
+Sample(1,Pressure_psia,IEEE4)
+Sample(1,Salinity_PPT,IEEE4)
+Sample(1,Specific_Conductivity_uScm,IEEE4)
+'Sample(1,BGA_PE_RFU,IEEE4)
+'Sample(1,BGA_PE_ugL,IEEE4)
+'Sample(1,TDS_mg_L,IEEE4)
+'Sample(1,Turbidity_FNU,IEEE4)
+Sample(1,Wiper_Position_mv,IEEE4)
+Sample(1,pH,IEEE4)
+Sample(1,pH_mv,IEEE4)
+Sample(1,Temp_C,IEEE4)
+Sample(1,Depth_m,IEEE4)
+Sample(1, Battery_v,IEEE4)
+Sample(1, Cable_v,IEEE4)
+Sample(1, Wiper_Current_ma,IEEE4)
+Sample (1,sn,String)
+Sample (1,snn,String)
+EndTable
+
+
+
+'Main Program
+BeginProg
+
+  
+	Scan (60,Sec,0,0)
+		PanelTemp (PTemp_C,15000)
+		Battery (BattV)
+SW12 (SW12_2,1 )
+SW12 (SW12_1,1 )
+
+
+If IfTime (0,2,min) AND Flag(10) =-1
+' NEW START
+
+
+
+SerialOpen (ComC3,9600,0,0,2500,0)           'ComPort, Baud Rate ()
+    SerialOut (ComC3,"0" + CHR(13),"?Command",3,10)       'ComPort, Output String (Charater 13 = ^M)
+    Delay (1,500,mSec)
+    SerialOut (ComC3,"ssn" + CHR(13) + CHR(10),"",1,0)    'Charater 10 = ^J, Line feed (LF).
+    Delay (1,500,mSec)
+    SerialIn (EXO2(2),ComC3,100,&H0D0A,2000)             'Destination (Raw EXO Data String)
+     
+    SerialOut (ComC3,"0" + CHR(13),"?Command",3,10)       'ComPort, Output String (Charater 13 = ^M)
+    Delay (1,500,mSec)
+    SerialOut (ComC3,"sn" + CHR(13) + CHR(10),"",1,0)    'Charater 10 = ^J, Line feed (LF).
+    Delay (1,500,mSec)
+    SerialIn (EXO2(1),ComC3,100,&H0D0A,2000)             'Destination (Raw EXO Data String)
+    Delay (1,500,mSec)
+    
+    
+    SerialOut (ComC3,"0" + CHR(13),"?Command",3,10)       'ComPort, Output String (Charater 13 = ^M)
+    Delay (1,500,mSec)
+    SerialOut (ComC3,"para 52 54 4 228 227 237 211 214 212 20 12" + CHR(13) + CHR(10),"",1,0)    'Charater 10 = ^J, Line feed (LF). 
+    'SerialOut (ComC3,"para 52 54 194 193 4 228 227 237 211 214 212 20 12" + CHR(13) + CHR(10),"",1,0)    'Charater 10 = ^J, Line feed (LF).
+    
+    'DO WE NEED TO CHANGE CHARACTER ARGUMENTS????
+    '194 and 193 removed
+    Delay (1,500,mSec)
+    SerialOut (ComC3,"0" + CHR(13),"?Command",3,10)       'ComPort, Output String (Charater 13 = ^M)
+    Delay (1,500,mSec)
+    SerialOut (ComC3,"data" + CHR(13) + CHR(10),"",1,0)    'Charater 10 = ^J, Line feed (LF).
+    Delay (1,500,mSec)
+    SerialIn (Sonde_data,ComC3,100,&H0D0A,1000)             'Destination (Raw EXO Data String)
+    Delay (1,500,mSec)
+   
+    'SerialFlush (ComC3)
+    
+    SerialOut (ComC3,"0" + CHR(13),"?Command",3,10)       'ComPort, Output String (Charater 13 = ^M)
+    Delay (1,500,mSec)
+    SerialOut (ComC3,"para 6 229 18 17 1 22 28 230 239" + CHR(13) + CHR(10),"",1,0)    'Charater 10 = ^J, Line feed (LF).
+'SerialOut (ComC3,"para 6 218 226 110 223 190 229 18 17 1 22 28 230 239" + CHR(13) + CHR(10),"",1,0)    'Charater 10 = ^J, Line feed (LF).
+       
+'218, 226, 110, 223, 190 removed
+        ' DO WE NEED TO CHANGE CHARACTER ARGUMENTS??
+    Delay (1,500,mSec)
+    SerialOut (ComC3,"0" + CHR(13),"?Command",3,10)       'ComPort, Output String (Charater 13 = ^M)
+    Delay (1,500,mSec)
+    SerialOut (ComC3,"data" + CHR(13) + CHR(10),"",1,0)    'Charater 10 = ^J, Line feed (LF).
+    Delay (1,500,mSec)
+    SerialIn (Sonde_data2,ComC3,100,&H0D0A,2000)             'Destination (Raw EXO Data String)
+    Delay (1,500,mSec)
+   
+    pSonde_data2 = Sonde_data2  
+  
+    pSonde_data = Sonde_data   
+    Sonde_data = Trim(Sonde_data)                                          'Copies String with no leading or trailing charaters.
+    Sonde_data2 = Trim(Sonde_data2)                                          'Copies String with no leading or trailing charaters.  
+   
+    SplitStr (EXO(1),Sonde_data," ",11,0)
+    SplitStr (EXO(12),Sonde_data2," ",9,0)
+  
+    SerialFlush (ComC3)                                                        'Clears data from buffer
+    SerialClose (ComC3)
+
+EndIf
+
+		
+
+		'Enter other measurement instructions
+		'Call Output Tables
+		'Example:
+		CallTable EXOTable
+	NextScan
+EndProg
+
